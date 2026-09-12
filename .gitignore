@@ -1,0 +1,71 @@
+# ===== PYTHON =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+vnev/
+env/
+ENV/
+.venv/
+
+# Environment variables (CRITICAL - never commit real secrets)
+.env
+.env.local
+.env.*.local
+*.env
+
+# ===== DATABASES =====
+*.db
+*.sqlite3
+
+# ===== ML MODELS (too large for git) =====
+models/
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.onnx
+*.h5
+
+# ===== DATA (too large for git) =====
+data/raw/
+data/processed/
+data/uploads/
+*.csv
+*.zip
+*.tar.gz
+
+# ===== NODE / REACT =====
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# ===== IDE =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== LOGS =====
+*.log
+logs/
+
+data/raw/
+models/

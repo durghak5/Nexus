@@ -1,0 +1,122 @@
+.results-page {
+  min-height: calc(100vh - 60px);
+  background-color: #f1f5f9;
+  display: flex;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+.results-card {
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  padding: 2rem;
+  width: 100%;
+  max-width: 900px;
+  height: fit-content;
+}
+
+/* Back link */
+.back-link {
+  display: inline-block;
+  color: #2563eb;
+  text-decoration: none;
+  font-size: 0.9rem;
+  margin-bottom: 1.25rem;
+  transition: opacity 0.2s ease;
+}
+
+.back-link:hover {
+  opacity: 0.75;
+}
+
+/* Heading */
+.results-heading {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #1e3a5f;
+  margin-bottom: 0.75rem;
+}
+
+.brand-highlight {
+  color: #2563eb;
+}
+
+/* Original price */
+.original-price {
+  font-size: 1rem;
+  color: #475569;
+  margin-bottom: 1.5rem;
+}
+
+/* States */
+.results-loading {
+  color: #64748b;
+  font-size: 1rem;
+  padding: 2rem 0;
+  text-align: center;
+}
+
+.results-error {
+  color: #dc2626;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  font-size: 0.95rem;
+}
+
+.no-results {
+  color: #64748b;
+  font-size: 1rem;
+  text-align: center;
+  padding: 2rem 0;
+}
+
+/* Table */
+.table-wrapper {
+  overflow-x: auto;
+}
+
+.results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.results-table thead tr {
+  background-color: #2563eb;
+  color: white;
+}
+
+.results-table th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.results-table td {
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid #e2e8f0;
+  color: #1e293b;
+}
+
+/* Alternating rows */
+.results-table tbody tr:nth-child(even) {
+  background-color: #f8fafc;
+}
+
+.results-table tbody tr:hover {
+  background-color: #eff6ff;
+}
+
+/* Savings colors */
+.saving-green {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.saving-gray {
+  color: #94a3b8;
+}
