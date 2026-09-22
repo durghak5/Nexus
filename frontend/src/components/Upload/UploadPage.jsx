@@ -1,131 +1,178 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import './UploadPage.css';
 
 function UploadPage() {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const inputRef = useRef(null);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
 
-  function applyFile(selectedFile) {
+  const handleFile = (selectedFile) => {
     if (!selectedFile) return;
-    if (!selectedFile.type.match(/image\/(jpeg|png)/)) {
-      alert('Please select a JPG or PNG image file.');
+    if (!selectedFile.type.startsWith('image/')) {
+      setError('Please select an image file');
       return;
     }
     setFile(selectedFile);
     setPreview(URL.createObjectURL(selectedFile));
-  }
+    setResult(null);
+    setError(null);
+  };
 
-  function handleFileChange(e) {
-    applyFile(e.target.files[0]);
-  }
-
-  function handleDragOver(e) {
+  const handleDrop = (e) => {
     e.preventDefault();
-    setIsDragging(true);
-  }
+    const dropped = e.dataTransfer.files[0];
+    handleFile(dropped);
+  };
 
-  function handleDragLeave() {
-    setIsDragging(false);
-  }
-
-  function handleDrop(e) {
-    e.preventDefault();
-    setIsDragging(false);
-    applyFile(e.dataTransfer.files[0]);
-  }
-
-  function handleProcess() {
+  const handleSubmit = async () => {
     if (!file) return;
-    console.log('Would send to OCR:', file.name);
-    alert('OCR pipeline coming soon');
-  }
+    setLoading(true);
+    setError(null);
+    setResult(null);
 
-  function formatSize(bytes) {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-  }
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch('http://localhost:8000/api/v1/ocr/process', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      const data = await res.json();
+      setResult(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const reset = () => {
+    setFile(null);
+    setPreview(null);
+    setResult(null);
+    setError(null);
+  };
 
   return (
     <div className="upload-page">
-      <div className="upload-card">
-        <h1 className="upload-heading">Upload Prescription</h1>
+      <h1>Upload Prescription</h1>
+      <p className="subtitle">
+        Upload a handwritten prescription image. Our OCR model will extract drug names and suggest alternatives.
+      </p>
 
-        {/* Drop zone */}
-        <div
-          className={`drop-zone ${isDragging ? 'drop-zone--active' : ''}`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => inputRef.current.click()}
-          role="button"
-          tabIndex={0}
-          aria-label="File drop zone"
-          onKeyDown={(e) => e.key === 'Enter' && inputRef.current.click()}
-        >
-          <input
-            ref={inputRef}
-            id="file-input"
-            type="file"
-            accept="image/jpeg,image/png"
-            className="file-input-hidden"
-            onChange={handleFileChange}
-          />
+      {!result && (
+        <>
+          <div
+            className={`drop-zone ${preview ? 'has-preview' : ''}`}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={handleDrop}
+            onClick={() => document.getElementById('file-input').click()}
+          >
+            {preview ? (
+              <img src={preview} alt="Preview" className="preview-img" />
+            ) : (
+              <div className="drop-content">
+                <div className="drop-icon">📤</div>
+                <p><strong>Drag & drop</strong> a prescription image here</p>
+                <p>or click to browse</p>
+              </div>
+            )}
+            <input
+              id="file-input"
+              type="file"
+              accept="image/*"
+              onChange={(e) => handleFile(e.target.files[0])}
+              style={{ display: 'none' }}
+            />
+          </div>
 
-          {preview ? (
-            <div className="preview-wrapper" onClick={(e) => e.stopPropagation()}>
-              <img
-                src={preview}
-                alt="Prescription preview"
-                className="preview-image"
-              />
-            </div>
-          ) : (
-            <div className="drop-zone-placeholder">
-              <svg className="upload-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" y1="3" x2="12" y2="15" />
-              </svg>
-              <p className="drop-zone-text">
-                Drag &amp; drop a prescription image here
-              </p>
-              <p className="drop-zone-subtext">JPG or PNG only</p>
+          {file && (
+            <div className="file-info">
+              <span>{file.name} ({(file.size / 1024).toFixed(1)} KB)</span>
+              <button className="btn-secondary" onClick={reset}>Remove</button>
             </div>
           )}
-        </div>
 
-        {/* Browse button */}
-        <button
-          id="browse-btn"
-          className="browse-btn"
-          onClick={() => inputRef.current.click()}
-          type="button"
-        >
-          Browse Files
-        </button>
-
-        {/* File info */}
-        {file && (
-          <div className="file-info">
-            <span className="file-name">{file.name}</span>
-            <span className="file-size">{formatSize(file.size)}</span>
+          <div className="actions">
+            <button
+              className="btn-primary"
+              onClick={handleSubmit}
+              disabled={!file || loading}
+            >
+              {loading ? 'Processing...' : 'Process Prescription'}
+            </button>
           </div>
-        )}
 
-        {/* Process button */}
-        <button
-          id="process-btn"
-          className="process-btn"
-          disabled={!file}
-          onClick={handleProcess}
-          type="button"
-        >
-          Process Prescription
-        </button>
-      </div>
+          {error && <div className="error-box">❌ {error}</div>}
+
+          {loading && (
+            <div className="loading-box">
+              🔍 Running OCR, extracting drugs, and finding alternatives... This may take 20-30 seconds.
+            </div>
+          )}
+        </>
+      )}
+
+      {result && (
+        <div className="results">
+          <div className="results-header">
+            <h2>📋 Results</h2>
+            <button className="btn-secondary" onClick={reset}>Process another</button>
+          </div>
+
+          <div className="summary">
+            <div className="summary-item">
+              <span className="summary-label">Text regions detected</span>
+              <span className="summary-value">{result.total_detected}</span>
+            </div>
+            <div className="summary-item">
+              <span className="summary-label">Drug names extracted</span>
+              <span className="summary-value">{result.total_drugs}</span>
+            </div>
+          </div>
+
+          {result.total_drugs === 0 && (
+            <div className="no-results">
+              ⚠️ No drug names matched the dictionary. Try a clearer image.
+            </div>
+          )}
+
+          {result.drugs.map((drug, idx) => (
+            <div key={idx} className="drug-card">
+              <div className="drug-header">
+                <h3>💊 {drug.name}</h3>
+                <span className="confidence-badge">
+                  {Math.round(drug.confidence * 100)}% confident
+                </span>
+              </div>
+              <div className="drug-meta">
+                <span>Raw OCR: <em>{drug.raw_text}</em></span>
+                <span>Match: {drug.source}</span>
+              </div>
+
+              {drug.recommendations.length > 0 ? (
+                <>
+                  <h4>Alternative brands (same composition):</h4>
+                  <ul className="alt-list">
+                    {drug.recommendations.map((alt, i) => (
+                      <li key={i}>
+                        <span className="alt-name">{alt.brand_name}</span>
+                        <span className="alt-match">{alt.composition_match}% match</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <p className="no-alt">No alternatives found in the database.</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

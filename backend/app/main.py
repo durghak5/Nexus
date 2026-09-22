@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
 from app.database.connection import engine, Base
-
+from app.api.ocr_routes import router as ocr_router
 # Create tables if they don't exist
 Base.metadata.create_all(bind=engine)
 
@@ -25,7 +25,7 @@ app.add_middleware(
 
 # Include routes
 app.include_router(router)
-
+app.include_router(ocr_router)
 @app.get("/")
 async def root():
     return {
