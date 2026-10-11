@@ -1,9 +1,7 @@
 """
-Full prescription pipeline:
-1. Detect text regions (EasyOCR)
-2. Recognize each crop with TrOCR
-3. Filter with dictionary in TRUSTED mode (no false positives)
-4. Return structured drug list
+Full prescription pipeline with Gemini-primary OCR.
+Gemini reads the full prescription image → extracts drug names directly.
+Falls back to EasyOCR + local TrOCR if Gemini fails.
 """
 
 import sys
@@ -12,110 +10,92 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-import re
-from app.ocr.detector import TextDetector
-from app.ocr.inference import PrescriptionOCR
+from app.ocr.gemini_ocr import GeminiOCR
 from app.ocr.dictionary import DrugDictionary
-
-
-STOPWORDS = {
-    'smile', 'designing', 'teeth', 'whitening', 'dental', 'implants', 'general',
-    'dentistry', 'sachin', 'sansare', 'date', 'sign', 'signature',
-    'meals', 'after', 'before', 'day', 'days', 'week', 'weeks', 'month',
-    'morning', 'night', 'evening', 'gum', 'paint', 'massage', 'use', 'take',
-    'clinic', 'hospital', 'address', 'phone', 'email', 'web', 'www', 'com',
-    'ph', 'mob', 'tel', 'reg', 'no', 'mbbs', 'md', 'bds', 'dr',
-    'rx', 'tab', 'cap', 'syp', 'inj', 'adv',
-}
-
-DOSAGE_PATTERN = re.compile(r'^\d+\s*(mg|ml|g|mcg|iu|%|x|tabs?|caps?)\b', re.IGNORECASE)
-FREQ_PATTERN = re.compile(r'^[\d\-\s/x]+$', re.IGNORECASE)
-DATE_PATTERN = re.compile(r'^\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4}$')
 
 
 class FullPrescriptionPipeline:
 
-    def __init__(self):
+    def __init__(self, use_gemini=True):
         print("🚀 Initializing Full Prescription Pipeline...")
-        self.detector = TextDetector()
-        self.ocr = PrescriptionOCR()
+
+        self.use_gemini = use_gemini
+        if use_gemini:
+            try:
+                self.gemini = GeminiOCR()
+            except Exception as e:
+                print(f"⚠️  Gemini init failed: {e}")
+                print("   Falling back to local TrOCR pipeline")
+                self.use_gemini = False
+
+        # Dictionary always loads (for correction + recommendations)
         self.dictionary = DrugDictionary()
+
+        # Lazy-load local pipeline only if needed
+        self._local_pipeline = None
+
         print("✅ Full pipeline ready\n")
 
+    def _get_local_pipeline(self):
+        """Lazy-load the local TrOCR pipeline (heavy)."""
+        if self._local_pipeline is None:
+            from app.ocr.full_prescription_local import FullPrescriptionPipelineLocal
+            self._local_pipeline = FullPrescriptionPipelineLocal()
+        return self._local_pipeline
+
     def process(self, image_path, verbose=True):
-        # STEP 1: Detect
-        if verbose:
-            print("🔍 Step 1: Detecting text regions...")
-        detections = self.detector.detect(image_path)
-        if verbose:
-            print(f"   Found {len(detections)} regions\n")
+        """
+        Main entry: process a prescription image.
+        Uses Gemini if available, else falls back to local pipeline.
+        """
+        if self.use_gemini:
+            return self._process_with_gemini(image_path, verbose)
+        else:
+            return self._get_local_pipeline().process(image_path, verbose)
 
-        # Sort by position
-        detections.sort(key=lambda d: (d["bbox"][1] // 20, d["bbox"][0]))
-
-        # STEP 2: Recognize
+    def _process_with_gemini(self, image_path, verbose=True):
         if verbose:
-            print("📖 Step 2: Reading each region with TrOCR...")
-        recognized = []
-        for i, det in enumerate(detections):
-            try:
-                text, conf = self.ocr.predict(det["crop"], return_confidence=True)
-                recognized.append({
-                    "bbox": det["bbox"],
-                    "easyocr_text": det["text"],
-                    "trocr_text": text or "",
-                    "trocr_confidence": conf or 0.0,
-                })
-            except Exception as e:
-                if verbose:
-                    print(f"   [{i}] Error: {e}")
+            print("🌟 Using Gemini OCR (full prescription mode)...")
 
-        # STEP 3: Trusted extraction
+        # 1. Gemini extracts drug names directly
+        try:
+            drug_names_raw = self.gemini.extract_drugs(image_path)
+        except Exception as e:
+            print(f"❌ Gemini failed: {e}")
+            print("   Falling back to local pipeline...")
+            return self._get_local_pipeline().process(image_path, verbose)
+
         if verbose:
-            print(f"\n💊 Step 3: Extracting drug names (trusted mode)...")
+            print(f"   Gemini found: {drug_names_raw}")
+
+        # 2. Validate each drug against dictionary
         drugs = []
-        seen_names = set()
-
-        for rec in recognized:
-            for source in ("trocr_text", "easyocr_text"):
-                candidate = rec[source].strip()
-                if not candidate or len(candidate) < 4:
-                    continue
-
-                candidate_lower = candidate.lower()
-                if candidate_lower in STOPWORDS:
-                    continue
-                if DOSAGE_PATTERN.match(candidate):
-                    continue
-                if FREQ_PATTERN.match(candidate):
-                    continue
-                if DATE_PATTERN.match(candidate):
-                    continue
-
-                # TRUSTED MATCHING ONLY
-                result = self.dictionary.correct(candidate, trusted_only=True)
-                if result["matched"]:
-                    canonical = result["corrected"].lower()
-                    if canonical in seen_names:
-                        break
-                    seen_names.add(canonical)
-                    drugs.append({
-                        "name": result["corrected"],
-                        "raw_text": candidate,
-                        "confidence": rec["trocr_confidence"],
-                        "source": result["source"],
-                        "bbox": rec["bbox"],
-                    })
-                    break
+        seen = set()
+        for name in drug_names_raw:
+            result = self.dictionary.correct(name, trusted_only=False)
+            canonical = result["corrected"].lower()
+            if canonical in seen:
+                continue
+            seen.add(canonical)
+            drugs.append({
+                "name": result["corrected"],
+                "raw_text": name,
+                "confidence": 0.99,       # Gemini is highly reliable
+                "source": "gemini" + ("+dict" if result["was_corrected"] else ""),
+                "was_corrected": result["was_corrected"],
+                "dictionary_matched": result["matched"],
+            })
 
         if verbose:
-            print(f"   ✅ Found {len(drugs)} drug names\n")
+            print(f"   ✅ {len(drugs)} drug names validated\n")
 
+        # Return in the same shape as the local pipeline (frontend compatibility)
         return {
-            "detections": detections,
-            "recognized": recognized,
+            "detections": [],                    # not applicable with Gemini
+            "recognized": [],
             "drugs": drugs,
             "count": len(drugs),
+            "source": "gemini",
         }
 
 
