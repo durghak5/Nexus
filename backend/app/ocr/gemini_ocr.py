@@ -40,7 +40,7 @@ class GeminiOCR:
 
         self.client = genai.Client(api_key=api_key)
         # Use the fast, free-tier friendly model
-        self.model = "gemini-3.8-flash"
+        self.model = "gemini-3.1-flash-lite"
         print(f"✅ Gemini OCR ready (model: {self.model})")
 
     def extract_drugs(self, image_path):

@@ -89,7 +89,29 @@ async def process_prescription(
             print(f"⚠️ Recommendation error for '{drug['name']}': {e}")
 
         drugs_with_recs.append(drug_info)
+        # Save to database so the agent can access it later
+    import json
+    from datetime import datetime as _dt
+    from app.database.models import Prescription as PrescriptionModel
 
+    try:
+        db_prescription = PrescriptionModel(
+            image_path=str(file_path),
+            uploaded_at=_dt.utcnow(),
+            ocr_status="COMPLETED",
+            confidence_score=0.99,
+            processed_text=json.dumps({
+                "drugs": [{"name": d["name"], "confidence": d["confidence"]} for d in drugs_with_recs],
+                "source": ocr_result.get("source", "gemini"),
+            }),
+        )
+        db.add(db_prescription)
+        db.commit()
+        db.refresh(db_prescription)
+        print(f"✅ Saved prescription #{db_prescription.id} with {len(drugs_with_recs)} drugs")
+    except Exception as e:
+        print(f"⚠️  Could not save prescription: {e}")
+        db.rollback()
     return {
         "success": True,
         "file_name": file.filename,

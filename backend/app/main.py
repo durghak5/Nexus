@@ -1,5 +1,5 @@
 # backend/app/main.py
-
+from app.api.agent_routes import router as agent_router
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
@@ -24,6 +24,7 @@ app.add_middleware(
 )
 
 # Include routes
+app.include_router(agent_router)
 app.include_router(router)
 app.include_router(ocr_router)
 @app.get("/")
